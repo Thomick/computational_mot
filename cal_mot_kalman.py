@@ -1,6 +1,4 @@
-from pdb import set_trace
 import numpy as np
-from numpy.lib.function_base import append
 from make_scenes import Canvas,Scene,Objs,visualize_frames
 #from filterpy.common import Q_discrete_white_noise
 
