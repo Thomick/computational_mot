@@ -8,7 +8,7 @@ import matplotlib.animation as animation
 
 
 class MotKalman():
-    def __init__(self, class_scene, num_targets=1, dt=1., std_measure=0.3, std_pred=0.3, covP=100.):
+    def __init__(self, class_scene, num_targets=1, dt=1., std_measure=0.3, std_pred=0.3, covP=100., use_correspondance=True):
         self.class_scene = class_scene
         self.num_measures = class_scene.max_frames
         self.num_targets = num_targets
@@ -16,12 +16,14 @@ class MotKalman():
         self.std_pred = std_pred
         self.covP = covP
         self.dt = dt
-        self.gt_pos = []
+        self.measured_pos = []
         self.K = [[]]*self.num_targets
         self.x = []
         self.P = []
         self.estimation = np.zeros((self.num_targets, self.num_measures, 4))
         self.est_pos = np.zeros((self.num_targets, self.num_measures, 2))
+        self.correspondance = [[]]*self.num_measures
+        self.use_correspondance = use_correspondance
 
         self.F = np.array([[1., self.dt, 0., 0.], [0., 1., 0., 0.], [
                           0., 0., 1., self.dt], [0., 0., 0., 1.]])  # state transition matrix
@@ -31,6 +33,7 @@ class MotKalman():
         self.H = np.array([[1., 0., 0, 0], [0., 0., 1., 0.]])
         # measurement noise
         self.R = np.array([[self.std_measure**2, 0], [0, self.std_measure**2]])
+        self.R_missing_data = np.array([[10000, 0], [0, 10000]])
         self.I = np.identity(4)  # identity matrix
 
         self.extract_measure()
@@ -43,33 +46,74 @@ class MotKalman():
             (class_scene.output_frames.shape))*class_scene.output_frames
 
     def extract_measure(self):
-        self.gt_pos = self.class_scene.get_measurements()
+        if self.use_correspondance:
+            self.measured_pos = self.class_scene.get_measurements(
+                permutation=True)
+        else:
+            self.measured_pos = self.class_scene.get_measurements(
+                permutation=False)
 
     def init_kalmanparams_all(self):
         [self.init_kalmanparams_eachobj(i) for i in range(self.num_targets)]
 
     def init_kalmanparams_eachobj(self, ind_obj):
-        self.x.append(np.array([[self.gt_pos[0][ind_obj][0]], [0.], [self.gt_pos[0][ind_obj][1]], [
+        self.x.append(np.array([[self.measured_pos[0][ind_obj][0]], [0.], [self.measured_pos[0][ind_obj][1]], [
                       0.]]))  # initial [position x,velocity x, velocity y, position y]
-        self.P.append(np.array([[0., 0., 0., 0.], [0., 0., 0., 0.], [
-                      0., self.covP, 0., 0.], [0., 0., 0., self.covP]]))  # covariance matrix
+        self.P.append(np.array([[0., 0., 0., 0.], [0., self.covP, 0., 0.], [
+                      0., 0., 0., 0.], [0., 0., 0., self.covP]]))  # covariance matrix
+
+    def build_correspondance(self, ind_frame):
+        assignment = [-1] * self.num_targets
+        x = []
+        P = []
+        for i in range(self.num_targets):
+            x_temp, P_temp = self.predictNext(i)
+            x.append(x_temp[[0, 2]])
+            P.append(P_temp)
+        for i in range(self.num_targets):
+            me = sorted(range(len(self.measured_pos[ind_frame])),
+                        key=lambda j: np.linalg.norm(x[i].T-np.array(self.measured_pos[ind_frame][j])))
+            for j in me:
+                if j not in assignment:
+                    assignment[i] = j
+                    break
+        self.correspondance[ind_frame] = assignment
 
     def exec_kalmanfilter_all(self):
         for n in range(self.num_measures):
+            if n > 0:
+                self.build_correspondance(n)
             [self.exec_kalmanfilter_eachobj(n, i)
              for i in range(self.num_targets)]
 
-    def exec_kalmanfilter_eachobj(self, ind_frame, ind_obj):
+    def predictNext(self, ind_obj):
         x = np.array(self.x[ind_obj])
         P = np.array(self.P[ind_obj])
 
         x = np.dot(self.F, x)
         P = np.dot(np.dot(self.F, P), self.F.T) + self.Q
+        return x, P
 
-        # measurement
-        z = np.array([self.gt_pos[ind_frame][ind_obj]])
+    def exec_kalmanfilter_eachobj(self, ind_frame, ind_obj):
+        x, P = self.predictNext(ind_obj)
+        R = self.R
+
+        if (self.use_correspondance):
+            if ind_frame == 0:
+                z = np.array([self.measured_pos[ind_frame][ind_obj]])
+                R = np.array([[0., 0.], [0., 0.]])
+            elif self.correspondance[ind_frame][ind_obj] == -1:
+                z = np.array([self.est_pos[ind_obj, ind_frame-1]])
+                R = self.R_missing_data
+            else:
+                z = np.array([self.measured_pos[ind_frame]
+                              [self.correspondance[ind_frame][ind_obj]]])
+        else:
+            z = np.array([self.measured_pos[ind_frame]
+                         [ind_obj]])
+
         y = z.T - np.dot(self.H, x)
-        S = np.dot(np.dot(self.H, P), self.H.T) + self.R
+        S = np.dot(np.dot(self.H, P), self.H.T) + R
         K = np.dot(np.dot(P, self.H.T), np.linalg.inv(S))
         x = x + np.dot(K, y)
         P = np.dot((self.I - np.dot(K, self.H)), P)
@@ -122,32 +166,31 @@ def visualize_frames_est(class_motkalman, canvas_x, canvas_y, flag_save=False, f
 
 
 if __name__ == '__main__':
-    # Scene parameters
-    num_obj = 3
+    num_obj = 5
     canvas_x = 256
     canvas_y = 256
     max_frames = 500
     diameter = 20
     trajectory_type = "bouncing"  # "bouncing" or "mean-reverting"
-    speed_range = [5, 5]  # in pixels per time
-    speedvar_prob = 0
-    speedvar_std = 1  # in pixels per time
-    directionvar_prob = 0
+    speed_range = [7, 7]  # in pixels per time
+    speedvar_prob = 0.
+    speedvar_std = 2  # in pixels per time
+    directionvar_prob = 0.
     directionvar_std = 15  # in degrees
-    inertia_param = 0.99  # between 0 and 1
-    accelnoise_std = 1
+    inertia_param = 0.01  # between 0 and 1
+    accelnoise_std = 0
     spring_constant = 0.01  # > 0
     occlusion_settings = OcclusionSettings(
-        -10, -500, [200, 0, canvas_x, canvas_y])
+        -300, -320, [0, 0, canvas_x, canvas_y])
     color_settings = ColorSettings(color_type="white", init_hue_range=[0, 1],
                                    hue_drift_range=[0.01, 0.01])
 
     # Kalman parameters
     dt = 1
     std_pred = 0.3
-    std_measure = 0.3
+    std_measure = 20
     num_targets = 2
-    covP = 500
+    covP = 200
 
     ##############################
     # make scenes
