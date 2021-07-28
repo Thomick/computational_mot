@@ -64,17 +64,22 @@ class Scene():
         self.init_stored_color = []
         self.tmp_color = []
         self.output_color = []
+        # Set to false if the scene will never be visualized (speed up generation)
         self.render = render
         # occlusion
+        # Removed because of conflicts with correspondence, should be reimplemented in make_measurement
         self.occlusion_settings = occlusion_settings
         # initialize
         self.initialize_scenes(class_baseobj)
         self.measure_noise_std = measure_noise_std
+        self.correspondence = [list(range(self.num_obj))] + [rnd.permutation(
+            list(range(self.num_obj))) for _ in range(self.max_frames - 1)]  # Contains the association between measurement and objects
+        self.measurements = []
 
     def initialize_scenes(self, class_baseobj):
         # initialize output frames
         self.output_frames = np.zeros(
-            (self.max_frames, self.class_canvas.canvas_y, self.class_canvas.canvas_x, 3))
+            (self.max_frames, self.class_canvas.canvas_y, self.class_canvas.canvas_x, 3), dtype=np.uint8)
 
         # make objects
         [self.add_newobj(class_baseobj) for i in range(self.num_obj)]
@@ -96,10 +101,12 @@ class Scene():
         self.output_centerpt.append(self.tmp_centerpt)
         self.output_color.append(self.tmp_color)
 
-    def update_scenes_all(self):
+    def update_scenes_all(self, quiet=False):
         for _ in range(self.max_frames-self.current_frame - 1):
             self.update_scene()
-        print("All frames were generated")
+        if not quiet:
+            print("All frames were generated")
+        self.make_measurements()
 
     def add_newobj(self, class_baseobj):
         new_obj = Objs(class_baseobj.class_canvas, class_baseobj.diameter,
@@ -168,15 +175,18 @@ class Scene():
     def get_gt_pos(self):
         return np.array([self.output_centerpt[ind] for ind in range(self.max_frames)])
 
+    def make_measurements(self, measure_std=None):  # Generate new measurements
+        if not measure_std == None:
+            self.measure_noise_std = measure_std
+        self.measurements = np.array([self.output_centerpt[ind] + rnd.normal(0, self.measure_noise_std, (self.num_obj, 2))
+                                      for ind in range(self.max_frames)])
+
+    # Get measurements (with or without permutation)
     def get_measurements(self, permutation=False):
         if permutation:
-            return [(
-                    self.output_centerpt[0] + rnd.normal(0, self.measure_noise_std, (self.num_obj, 2)))[[ind_obj for ind_obj in range(self.num_obj) if self.is_visible(0, ind_obj)]]] + [rnd.permutation((
-                        self.output_centerpt[ind_frame] + rnd.normal(0, self.measure_noise_std, (self.num_obj, 2)))[[ind_obj for ind_obj in range(self.num_obj) if self.is_visible(ind_frame, ind_obj)]])
-                for ind_frame in range(1, self.max_frames)]
+            return [self.measurements[ind_frame][[self.correspondence[ind_frame][ind_obj] for ind_obj in range(self.num_obj)]] for ind_frame in range(self.max_frames)]
         else:
-            return np.array([self.output_centerpt[ind] + rnd.normal(0, self.measure_noise_std, (self.num_obj, 2))
-                             for ind in range(self.max_frames)])
+            return self.measurements
 
     def in_rectangle(self, pos, rectangle):
         return pos[0] >= rectangle[0] and pos[0] < rectangle[2] and pos[1] >= rectangle[1] and pos[1] < rectangle[3]
@@ -186,11 +196,22 @@ class Scene():
             not (ind_frame >= self.occlusion_settings.start and ind_frame <= self.occlusion_settings.end
                  and self.in_rectangle(self.output_centerpt[ind_frame][ind_obj], self.occlusion_settings.rectangle))
 
+    def save_scene(self, name):  # Save scene center points
+        np.save(name, self.output_centerpt)
+
+    # Load scene center points, can't be used before generating an animation
+    # Run make_measurement before anything else
+    # The scene must only be used to run one of the models using make_measurement/get_measurement
+    def load_scene(self, name):
+        self.output_centerpt = np.load(f"{name}.npy")
+
+# Trajectory parameters and transition function
+
 
 class Trajectory():
     def __init__(self, trajectory_type="bouncing", speed_range=[3, 7], speedvar_prob=0., speedvar_std=4,
                  directionvar_prob=0., directionvar_std=10, inertia_param=0, accelnoise_std=0, spring_constant=0.01):
-        self.trajectory_type = trajectory_type  # bouncing or mean-reverting
+        self.trajectory_type = trajectory_type  # "bouncing" or "mean-reverting"
         self.speed_range = speed_range
         self.speedvar_prob = speedvar_prob
         self.speedvar_std = speedvar_std
@@ -210,8 +231,12 @@ class Trajectory():
             if rnd.uniform() < self.speedvar_prob:
                 speed_norm = np.linalg.norm(speed, 2)
                 if speed_norm > 0:
-                    speed += rnd.normal(0, self.speedvar_std) / \
-                        speed_norm * speed
+                    increment = rnd.normal(0, self.speedvar_std)
+                    if increment > -speed_norm:
+                        speed += increment / \
+                            speed_norm * speed
+                    else:
+                        speed = self.speed_range[0] / speed_norm * speed
             if rnd.uniform() < self.directionvar_prob:
                 rot_angle = rnd.normal(0, self.directionvar_std)
                 s = np.sin(np.deg2rad(rot_angle))
@@ -239,6 +264,14 @@ class Trajectory():
                  - obj.pos)
             speed += -self.inertia_param*speed + \
                 spring_comp + rnd.normal(0, self.accelnoise_std, 2)
+            if obj.pos[0] < obj.diameter/2:
+                obj.pos[0] = obj.diameter/2
+            if obj.pos[1] < obj.diameter/2:
+                obj.pos[1] = obj.diameter/2
+            if obj.pos[0] > obj.class_canvas.canvas_x - obj.diameter/2:
+                obj.pos[0] = obj.class_canvas.canvas_x - obj.diameter/2
+            if obj.pos[1] > obj.class_canvas.canvas_y - obj.diameter/2:
+                obj.pos[1] = obj.class_canvas.canvas_y - obj.diameter/2
 
         return speed
 
@@ -288,20 +321,21 @@ def visualize_frames(class_scene, canvas_x, canvas_y, flag_save=False, fname_sav
 
 
 if __name__ == '__main__':
-    num_obj = 3
+    num_obj = 8
     canvas_x = 256
     canvas_y = 256
     max_frames = 500
     diameter = 20
-    trajectory_type = "bouncing"  # "bouncing" or "mean-reverting"
+    trajectory_type = "mean-reverting"  # "bouncing" or "mean-reverting"
     speed_range = [4, 7]  # in pixels per time
     speedvar_prob = 0.2
     speedvar_std = 1  # in pixels per time
     directionvar_prob = 0
     directionvar_std = 15  # in degrees
-    inertia_param = 0.01  # between 0 and 1
+    inertia_param = 0.0  # between 0 and 1
     accelnoise_std = 0
-    spring_constant = 0.01  # > 0
+    spring_constant = 0.001  # > 0
+
     occlusion_settings = OcclusionSettings(
         -10, -500, [200, 0, canvas_x, canvas_y])
     color_settings = ColorSettings(color_type="white", init_hue_range=[0, 1],

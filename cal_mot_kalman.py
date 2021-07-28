@@ -8,7 +8,7 @@ import matplotlib.animation as animation
 
 
 class MotKalman():
-    def __init__(self, class_scene, num_targets=1, dt=1., std_measure=0.3, std_pred=0.3, covP=100., use_correspondance=True):
+    def __init__(self, class_scene, num_targets=1, dt=1., std_measure=0.3, std_pred=0.3, covP=100., use_correspondence=True):
         self.class_scene = class_scene
         self.num_measures = class_scene.max_frames
         self.num_targets = num_targets
@@ -22,11 +22,11 @@ class MotKalman():
         self.P = []
         self.estimation = np.zeros((self.num_targets, self.num_measures, 4))
         self.est_pos = np.zeros((self.num_targets, self.num_measures, 2))
-        self.correspondance = [[]]*self.num_measures
-        self.use_correspondance = use_correspondance
+        self.correspondence = [[]]*self.num_measures
+        # Use the correspondence part of the model (if not the measurement are not shuffled)
+        self.use_correspondence = use_correspondence
 
-        self.F = np.array([[1., self.dt, 0., 0.], [0., 1., 0., 0.], [
-                          0., 0., 1., self.dt], [0., 0., 0., 1.]])  # state transition matrix
+        self.init_F()
         q = Q_discrete_white_noise(dim=2, dt=self.dt, var=self.std_pred)
         self.Q = block_diag(q, q)
         # to extract position coordinates
@@ -45,8 +45,12 @@ class MotKalman():
         self.est_frames = np.ones(
             (class_scene.output_frames.shape))*class_scene.output_frames
 
+    def init_F(self):
+        self.F = np.array([[1., self.dt, 0., 0.], [0., 1., 0., 0.], [
+            0., 0., 1., self.dt], [0., 0., 0., 1.]])
+
     def extract_measure(self):
-        if self.use_correspondance:
+        if self.use_correspondence:
             self.measured_pos = self.class_scene.get_measurements(
                 permutation=True)
         else:
@@ -62,7 +66,8 @@ class MotKalman():
         self.P.append(np.array([[0., 0., 0., 0.], [0., self.covP, 0., 0.], [
                       0., 0., 0., 0.], [0., 0., 0., self.covP]]))  # covariance matrix
 
-    def build_correspondance(self, ind_frame):
+    # Link the measurement to their respecting target
+    def build_correspondence(self, ind_frame):
         assignment = [-1] * self.num_targets
         x = []
         P = []
@@ -77,12 +82,12 @@ class MotKalman():
                 if j not in assignment:
                     assignment[i] = j
                     break
-        self.correspondance[ind_frame] = assignment
+        self.correspondence[ind_frame] = assignment
 
     def exec_kalmanfilter_all(self):
         for n in range(self.num_measures):
             if n > 0:
-                self.build_correspondance(n)
+                self.build_correspondence(n)
             [self.exec_kalmanfilter_eachobj(n, i)
              for i in range(self.num_targets)]
 
@@ -98,16 +103,16 @@ class MotKalman():
         x, P = self.predictNext(ind_obj)
         R = self.R
 
-        if (self.use_correspondance):
+        if (self.use_correspondence):   # Wether or not
             if ind_frame == 0:
                 z = np.array([self.measured_pos[ind_frame][ind_obj]])
                 R = np.array([[0., 0.], [0., 0.]])
-            elif self.correspondance[ind_frame][ind_obj] == -1:
+            elif self.correspondence[ind_frame][ind_obj] == -1:
                 z = np.array([self.est_pos[ind_obj, ind_frame-1]])
                 R = self.R_missing_data
             else:
                 z = np.array([self.measured_pos[ind_frame]
-                              [self.correspondance[ind_frame][ind_obj]]])
+                              [self.correspondence[ind_frame][ind_obj]]])
         else:
             z = np.array([self.measured_pos[ind_frame]
                          [ind_obj]])
@@ -153,7 +158,7 @@ class MotKalman():
             r < self.class_scene.stored_objs[ind_obj].diameter/2)] = self.col_obj[2]
 
 
-def visualize_frames_est(class_motkalman, canvas_x, canvas_y, flag_save=False, fname_save='sample_est.gif'):
+def visualize_frames_est(class_motkalman, canvas_x, canvas_y, flag_save=False, fname_save='sample_est.gif', show=True):
     fig = plt.figure()
     ax = fig.add_subplot(111)
     tmp = class_motkalman.est_frames.astype('uint8')
@@ -162,34 +167,36 @@ def visualize_frames_est(class_motkalman, canvas_x, canvas_y, flag_save=False, f
     ani = animation.ArtistAnimation(fig, imgs, interval=1)
     if (flag_save == True):
         ani.save(fname_save, writer="pillow", fps=60)
-    plt.show()
+    if show:
+        plt.show()
 
 
 if __name__ == '__main__':
-    num_obj = 5
+    num_obj = 8
     canvas_x = 256
     canvas_y = 256
     max_frames = 500
     diameter = 20
-    trajectory_type = "bouncing"  # "bouncing" or "mean-reverting"
-    speed_range = [7, 7]  # in pixels per time
-    speedvar_prob = 0.
-    speedvar_std = 2  # in pixels per time
-    directionvar_prob = 0.
+    trajectory_type = "mean-reverting"  # "bouncing" or "mean-reverting"
+    speed_range = [4, 7]  # in pixels per time
+    speedvar_prob = 0.2
+    speedvar_std = 1  # in pixels per time
+    directionvar_prob = 0
     directionvar_std = 15  # in degrees
-    inertia_param = 0.01  # between 0 and 1
+    inertia_param = 0.0  # between 0 and 1
     accelnoise_std = 0
-    spring_constant = 0.01  # > 0
+    spring_constant = 0.001  # > 0
+
     occlusion_settings = OcclusionSettings(
-        -300, -320, [0, 0, canvas_x, canvas_y])
+        -10, -500, [200, 0, canvas_x, canvas_y])
     color_settings = ColorSettings(color_type="white", init_hue_range=[0, 1],
                                    hue_drift_range=[0.01, 0.01])
 
     # Kalman parameters
     dt = 1
     std_pred = 0.3
-    std_measure = 20
-    num_targets = 2
+    std_measure = 0.3
+    num_targets = 4
     covP = 200
 
     ##############################
