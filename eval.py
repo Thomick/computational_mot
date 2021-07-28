@@ -1,4 +1,5 @@
 # Evaluation script for a single parameter
+# Save data but ca not visualize them again with the same script
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -209,6 +210,11 @@ def visualize_performance_multiple_runs(parameters, num_subject, num_run, metric
 if __name__ == '__main__':
     parameters = []
 
+    # Eval parameters
+    num_subject = 10
+    num_run = 10
+
+    # Default parameters
     num_target = 3
     num_distractor = 3
     canvas_x = 256
@@ -239,7 +245,8 @@ if __name__ == '__main__':
     covP = 200
 
     # Register all scene parameters used during evaluation
-    for s in range(0, 1):
+    for s in range(0, 10):
+        std_measure = s  # Modify 1 parameter
         params = {}
         class_trajectory = Trajectory(trajectory_type, speed_range, speedvar_prob, speedvar_std,
                                       directionvar_prob, directionvar_std, inertia_param, accelnoise_std, spring_constant)
@@ -257,14 +264,11 @@ if __name__ == '__main__':
         params["class_trajectory"] = class_trajectory
         params["class_canvas"] = class_canvas
         params["class_baseobj"] = class_baseobj
-        params["label"] = s
+        params["label"] = std_measure  # Label of the current measurement
         params["inertia"] = inertia_param
         params["min_speed"] = speed_range[0]
         params["spring_constant"] = spring_constant
         parameters.append(params)
-
-    num_subject = 10
-    num_run = 10
 
     means = visualize_performance_multiple_runs(
         parameters, num_subject, num_run, metric="get_accuracy", bar_chart=False, save_graph=False, save_data=False, model="normal", with_error=True, show=False,
