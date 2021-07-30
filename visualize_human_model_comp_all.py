@@ -14,7 +14,6 @@ size_x = 9
 size_y = 8
 
 # Collect data from all scenes
-
 base_folder = "trials/scene33"
 speeds = [1.0, 2.5, 4.0, 5.5, 7.0]
 x_values, y_values, z_values3 = get_data(
