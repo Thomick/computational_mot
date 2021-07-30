@@ -5,9 +5,6 @@ import numpy as np
 import numpy.random as rnd
 import matplotlib.pyplot as plt
 from cal_mot_kalman import MotKalman, visualize_frames_est
-from cal_mot_kalman_accel import MotKalmanAccel
-from cal_mot_kalman_meanreverting import MotKalmanMR
-from cal_mot_kalman_bouncing import MotKalmanB
 from make_scenes import Trajectory, OcclusionSettings, ColorSettings, Scene, Objs, Canvas
 from moviepy.editor import ImageSequenceClip
 from PIL import Image, ImageDraw, ImageFont

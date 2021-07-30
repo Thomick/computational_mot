@@ -1,14 +1,9 @@
 # Evaluation script for a single parameter
-# Save data but ca not visualize them again with the same script
 
 import numpy as np
 import matplotlib.pyplot as plt
 from cal_mot_kalman import MotKalman
-from cal_mot_kalman_accel import MotKalmanAccel
-from cal_mot_kalman_meanreverting import MotKalmanMR
-from cal_mot_kalman_bouncing import MotKalmanB
 from make_scenes import Trajectory, OcclusionSettings, ColorSettings, Scene, Objs, Canvas
-import csv
 
 
 def count_target_switch(corresp_filter, scene, num_target, frame_range):
@@ -112,7 +107,7 @@ def errorfill(x, y, yerr, alpha_fill=0.3, ax=None):
     return base_line
 
 
-def visualize_performance_multiple_runs(parameters, num_subject, num_run, metric="cumulated_error", bar_chart=True, with_error=True, save_graph=True, save_data=True, model="normal", x_axis_label="", y_axis_label="", threshold=20, title="", show=True, legend=""):
+def visualize_performance_multiple_runs(parameters, num_subject, num_run, metric="cumulated_error", bar_chart=True, with_error=True, save_graph=True, x_axis_label="", y_axis_label="", threshold=20, title="", show=True, legend=""):
     # parameters : list of dictionaries
     # metric : cumulated_error, last_frame_error, get_accuracy, target_switch_ratio, success_rate
     labels = []
@@ -132,22 +127,10 @@ def visualize_performance_multiple_runs(parameters, num_subject, num_run, metric
                 class_scene = Scene(d["class_canvas"], d["class_baseobj"],
                                     d["max_frames"], d["num_obj"], d["occlusion_settings"], d["std_measure"], render=False)
                 class_scene.update_scenes_all(quiet=True)
-                # Kalman parameters
-                if(model == "normal"):
-                    class_motkalman = MotKalman(class_scene, num_targets=d["num_targets"],
-                                                dt=d["dt"], std_measure=d["std_measure"], std_pred=d["std_pred"], covP=d["covP"])
-                elif (model == "acceleration"):
-                    class_motkalman = MotKalmanAccel(class_scene, num_targets=d["num_targets"],
-                                                     dt=d["dt"], std_measure=d["std_measure"], std_pred=d["std_pred"], covP=d["covP"])
-                elif (model == "mean-reverting"):
-                    class_motkalman = MotKalmanMR(class_scene, num_targets=d["num_targets"],
-                                                  dt=d["dt"], std_measure=d["std_measure"], std_pred=d["std_pred"], covP=d["covP"], inertia_param=d["inertia"], spring_constant=d["spring_constant"])
-                elif (model == "bouncing"):
-                    class_motkalman = MotKalmanB(class_scene, num_targets=d["num_targets"],
-                                                 dt=d["dt"], std_measure=d["std_measure"], std_pred=d["std_pred"], covP=d["covP"], inertia_param=d["inertia"], min_speed=d["min_speed"])
-                else:
-                    print("Unknown model")
-                    break
+                # Kalman class
+                class_motkalman = MotKalman(class_scene, num_targets=d["num_targets"],
+                                            dt=d["dt"], std_measure=d["std_measure"], std_pred=d["std_pred"], covP=d["covP"])
+
                 gt_pos = class_scene.get_gt_pos()
                 est_pos = class_motkalman.est_pos
 
@@ -197,11 +180,7 @@ def visualize_performance_multiple_runs(parameters, num_subject, num_run, metric
         ax.legend()
     plt.tight_layout()
     if save_graph:
-        plt.savefig(f"{title}-{model}.png")
-    if save_data:
-        with open(f"{title}-{model}", 'w', encoding='UTF8', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerows(all_data)
+        plt.savefig(f"{title}.png")
     if show:
         plt.show()
     return means
@@ -232,6 +211,7 @@ if __name__ == '__main__':
     spring_constant = 0.001
 
     num_obj = num_distractor + num_target
+
     occlusion_settings = OcclusionSettings(
         -300, -320, [0, 0, canvas_x, canvas_y])
     color_settings = ColorSettings(color_type="white", init_hue_range=[0, 1],
@@ -241,7 +221,6 @@ if __name__ == '__main__':
     dt = 1
     std_pred = 10
     std_measure = 1
-    num_targets = 4
     covP = 200
 
     # Register all scene parameters used during evaluation
@@ -259,7 +238,7 @@ if __name__ == '__main__':
         params["dt"] = dt
         params["std_pred"] = std_pred
         params["std_measure"] = std_measure
-        params["num_targets"] = num_targets
+        params["num_targets"] = num_target
         params["covP"] = covP
         params["class_trajectory"] = class_trajectory
         params["class_canvas"] = class_canvas
@@ -271,6 +250,6 @@ if __name__ == '__main__':
         parameters.append(params)
 
     means = visualize_performance_multiple_runs(
-        parameters, num_subject, num_run, metric="get_accuracy", bar_chart=False, save_graph=False, save_data=False, model="normal", with_error=True, show=False,
+        parameters, num_subject, num_run, metric="get_accuracy", bar_chart=False, save_graph=False, with_error=True, show=True,
         y_axis_label="Accuracy", x_axis_label="Process noise (standard deviation)", title="Kalman filter model performance\nas a function of process noise", legend="Classic Kalman filter")
     print(means[0])

@@ -10,14 +10,14 @@ def get_model_perf(basefolder, measstd, procstd, speed):
     with open(filename, 'r') as f:
         _ = f.readline()
         for l in f.readlines():
-            meas, proc, scene, score, = l.split(',')
+            meas, proc, _, score, = l.split(',')
             if float(meas) == measstd and float(proc) == procstd:
                 res.append(float(score))
     return np.mean(res)
 
 
-filename = "human_speed55.csv"
-title = "Average accuracy as a function of target speed (5 targets, 5 distractors)"
+filename = "trials/human_average44.csv"
+title = "Average accuracy as a function of target speed (4 targets, 4 distractors)"
 
 
 fig = plt.figure()
@@ -43,11 +43,11 @@ ax.set_ylim(-0.05, 1.05)
 
 # Configure other lines of the plot
 # Line 2
-measstd = 2.7
+measstd = 1.1
 procstd = 0.1
 y_model = []
-basefolder = "scene55_higher_res"
-x = [1.0, 2.5, 4.0]
+basefolder = "trials/scene44_higher_res"
+x = [1.0, 2.5, 4.0, 5.5, 7.0]
 for speed in x:
     print(get_model_perf(basefolder, measstd, procstd, speed))
     y_model.append(get_model_perf(basefolder, measstd, procstd, speed))
@@ -60,8 +60,8 @@ line.set_label(
 measstd = 1.0
 procstd = 0
 y_model = []
-basefolder = "scene55"
-x = [1.0, 2.5, 4.0]
+basefolder = "trials/scene44"
+x = [1.0, 2.5, 4.0, 5.5, 7.0]
 for speed in x:
     print(get_model_perf(basefolder, measstd, procstd, speed))
     y_model.append(get_model_perf(basefolder, measstd, procstd, speed))

@@ -1,6 +1,3 @@
-# Plot average across all speeds as a function of 2 parameters
-# Needs the right folder structure
-
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
@@ -17,10 +14,10 @@ def compute_average_diff(human_perf, model_perf, print_all=False):
     return np.mean(diffs)
 
 
-def get_data(base_folder, speeds, human_score_file="human_score.csv", model_perf_file="model_perf.csv"):
+def get_data(model_base_folder, human_score_base_folder, speeds, human_score_file="human_score.csv", model_perf_file="model_perf.csv"):
     human_score = {}
     for s in speeds:
-        with open(f"{base_folder}/{s}px/{human_score_file}", 'r') as f:
+        with open(f"{human_score_base_folder}/{s}px/{human_score_file}", 'r') as f:
             _ = f.readline()
             for line in f.readlines():
                 scene_id, score, = line.split(sep=',')
@@ -29,7 +26,7 @@ def get_data(base_folder, speeds, human_score_file="human_score.csv", model_perf
 
     model_score = {}
     for s in speeds:
-        with open(f"{base_folder}/{s}px/{model_perf_file}", 'r') as f:
+        with open(f"{model_base_folder}/{s}px/{model_perf_file}", 'r') as f:
             _ = f.readline()
             for line in f.readlines():
                 meas_noise, process_noise, scene_id, score, = line.split(
@@ -60,33 +57,21 @@ def get_data(base_folder, speeds, human_score_file="human_score.csv", model_perf
     return x_values, y_values, z_values
 
 
-def plot_flat(x_values, y_values, z_values, size_x, size_y, annot):
-    value_mesh = np.array(z_values).reshape((size_y, size_x))
-    fig = plt.figure()
-    ax = fig.gca()
-
-    im = plt.pcolormesh(x_values[:size_x], y_values[::size_x],
-                        value_mesh, cmap="viridis", shading='auto')
-    ax.set_title(
-        f"Average absolute accuracy difference\nbetween a human subject and the model\nacross all speeds{annot}")
-    fig.colorbar(im, shrink=0.5, aspect=5)
-    # plt.clim(0.05, 0.45)
-    ax.set_ylabel("Process noise")
-    ax.set_xlabel("Measurement noise")
-    plt.tight_layout()
-    plt.show()
-
-
 if __name__ == '__main__':
-    base_folder = "trials/scene44"
+    model_base_folder = "trials/scene55_higher_res"
+    human_score_base_folder = "trials/scene55"
     human_score_file = "human_score.csv"
     model_perf_file = "model_perf.csv"
-    annot = " (4 targets, 4 distractors)"
-    size_x = 9
-    size_y = 8
+    annot = " (5 targets, 5 distractors)"
 
-    speeds = [1.0, 2.5, 4.0, 5.5, 7.0]
+    speeds = [1.0, 2.5, 4.0]
     x_values, y_values, z_values = get_data(
-        base_folder, speeds, human_score_file, model_perf_file)
+        model_base_folder, human_score_base_folder, speeds, human_score_file, model_perf_file)
 
-    plot_flat(x_values, y_values, z_values, size_x, size_y, annot)
+    ax = plt.gca()
+    plt.plot(x_values, z_values, '-o')
+    ax.set_xlabel("Measurement noise")
+    ax.set_ylabel("Absolute accuracy difference")
+    ax.set_title(
+        f"Average absolute accuracy difference\nbetween a human subject and the model{annot}")
+    plt.show()

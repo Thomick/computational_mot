@@ -36,8 +36,8 @@ def compute_mean_perf(perf):
 
 
 # Plot and folder parameters
-folder = "scene44/7.0px"
-annot = "\n(7px/frame, 4 targets, 4 distractors)"
+folder = "trials/scene44/2.5px"
+annot = "\n(2.5px/frame, 4 targets, 4 distractors)"
 human_score_file = "human_score.csv"
 model_perf_file = "model_perf.csv"
 # Do not compare to human performance but plot average performance instead
