@@ -13,6 +13,8 @@ annot = " and all numbers of targets"
 size_x = 9
 size_y = 8
 
+# Collect data from all scenes
+
 base_folder = "trials/scene33"
 speeds = [1.0, 2.5, 4.0, 5.5, 7.0]
 x_values, y_values, z_values3 = get_data(
@@ -28,6 +30,7 @@ speeds = [1.0, 2.5, 4.0]
 _, _, z_values5 = get_data(
     base_folder, speeds, human_score_file, model_perf_file)
 
+# Compute average
 z_values = (np.array(z_values3)+np.array(z_values4)+np.array(z_values5))/3
 
 plot_flat(x_values, y_values, z_values, size_x, size_y, annot)

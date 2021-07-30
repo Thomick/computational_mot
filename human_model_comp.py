@@ -1,5 +1,5 @@
 # Generate scenes and run a model on them for different parameters (2) (Saved to files)
-# Should be visualized with visualize_human_model_comp.py
+# Should be visualized with visualize_human_model_comp.py (or similar scripts)
 
 import numpy as np
 import numpy.random as rnd
@@ -70,11 +70,13 @@ def compute_average_diff(reference, scores):
     return total/len(reference)
 
 
+####### Main code #######
 if __name__ == '__main__':
 
     # Trial parameters
     folder = "scene33/4.0px"
-    generate_new_scenes = True  # Use already generated scenes from the folder
+    # Use already generated scenes from the folder (!! if set to true, old files wil be overwritten)
+    generate_new_scenes = True
     nb_scene = 30
     nb_rep = 5
 
@@ -85,17 +87,22 @@ if __name__ == '__main__':
     canvas_y = 256
     max_frames = 500
     diameter = 20
-    trajectory_type = "bouncing"
+    trajectory_type = "bouncing"  # "bouncing" or "mean-reverting"
+    # for bouncing trajectories
     speed_range = [4, 4]
     speedvar_prob = 0.0
     speedvar_std = 1
     directionvar_prob = 0.0
     directionvar_std = 15
-    inertia_param = 0.01
+    # for mean-reverting trajectories
     accelnoise_std = 0
     spring_constant = 0.01
+    # for both
+    inertia_param = 0.01
 
     num_obj = num_distractor + num_target
+
+    # Occlusion does not affect the model currently
     occlusion_settings = OcclusionSettings(
         -300, -320, [0, 0, canvas_x, canvas_y])
     color_settings = ColorSettings(color_type="white", init_hue_range=[0, 1],
@@ -106,6 +113,8 @@ if __name__ == '__main__':
     std_pred = 10
     std_measure = 1
     covP = 200
+
+    ##### End of parameters ####
 
     scenes = []
     for i in range(nb_scene):
@@ -124,11 +133,13 @@ if __name__ == '__main__':
         class_scene.update_scenes_all()
 
         if generate_new_scenes:
+            # Save scene
             class_scene.save_scene(f"{folder}/scene{i}")
             file_name = i
             answers = make_video_for_humans(
                 f"{folder}/{file_name}", class_scene, num_target)
-            with open(f"{folder}/answer{i}.txt", 'w') as f:  # Write answers
+            # Write answers in a file in the base folder
+            with open(f"{folder}/answer{i}.txt", 'w') as f:
                 f.write(f"answer = {answers}\n")
         else:
             class_scene.load_scene(f"{folder}/scene{i}")
@@ -139,12 +150,15 @@ if __name__ == '__main__':
     meas_noises = []
     scores = []
     scene_id = []
-    for proc in range(8):
-        for meas in range(9):
+    for proc in range(8):  # Should be set to the desired range
+        for meas in range(9):  # Second axis range
             for i in range(nb_scene):
-                total = 0
+                # Set variable parameters
                 std_pred = proc*20
                 std_measure = meas
+
+                # Compute average performance
+                total = 0
                 for j in range(nb_rep):
                     scenes[i].make_measurements(std_measure + 0.1)
                     class_motkalman = MotKalman(

@@ -1,5 +1,5 @@
 # Visualize data from human_model_comp.py
-# Human accuracy data must be given in order to compare it with the model
+# Human accuracy data must be given (same folder) in order to compare it with the model
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -37,15 +37,17 @@ def compute_mean_perf(perf):
 
 # Plot and folder parameters
 folder = "trials/scene44/2.5px"
+# Relevant information to add to the title
 annot = "\n(2.5px/frame, 4 targets, 4 distractors)"
 human_score_file = "human_score.csv"
 model_perf_file = "model_perf.csv"
 # Do not compare to human performance but plot average performance instead
 only_draw_average = False
-# Number of values used on each axis
+# Number of values used on each axis (Must be the same as the range used in human_model_comp.py)
 size_x = 9
 size_y = 8
 
+# Get human data
 human_score = {}
 if not only_draw_average:
     with open(f"{folder}/{human_score_file}", 'r') as f:
@@ -54,6 +56,7 @@ if not only_draw_average:
             scene_id, score, = line.split(sep=',')
             human_score[int(scene_id)] = float(score)
 
+# Get model data
 model_score = {}
 with open(f"{folder}/{model_perf_file}", 'r') as f:
     _ = f.readline()
@@ -72,6 +75,7 @@ y_values = []
 z_values = []
 means = []
 
+# Compute the value to plot based on the data
 for meas_noise, process_noise in model_score:
     x_values.append(meas_noise)
     y_values.append(process_noise)
@@ -83,6 +87,7 @@ for meas_noise, process_noise in model_score:
     z_values.append(val)
     print(meas_noise, process_noise, val)
 
+# Resize values
 value_mesh = np.array(z_values).reshape((size_y, size_x))
 means_mesh = np.array(means).reshape((size_y, size_x))
 print(value_mesh.shape)
@@ -99,12 +104,13 @@ else:
                         value_mesh, cmap="viridis", shading='auto')
     ax.set_title(
         f"Average absolute accuracy difference\nbetween a human subject and the model{annot}")
+
 fig.colorbar(im, shrink=0.5, aspect=5)
 ax.set_ylabel("Process noise")
 ax.set_xlabel("Measurement noise")
 plt.tight_layout()
 
-if not only_draw_average:
+if not only_draw_average:  # Print average human score
     print(f"Human average score: {compute_mean_perf(human_score)}")
 
 plt.show()

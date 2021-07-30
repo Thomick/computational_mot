@@ -18,6 +18,7 @@ def compute_average_diff(human_perf, model_perf, print_all=False):
 
 
 def get_data(base_folder, speeds, human_score_file="human_score.csv", model_perf_file="model_perf.csv"):
+    # Get human data
     human_score = {}
     for s in speeds:
         with open(f"{base_folder}/{s}px/{human_score_file}", 'r') as f:
@@ -27,6 +28,7 @@ def get_data(base_folder, speeds, human_score_file="human_score.csv", model_perf
                 human_score[int(scene_id)] = human_score.get(int(scene_id), [])
                 human_score[int(scene_id)].append(float(score))
 
+    # Get model data
     model_score = {}
     for s in speeds:
         with open(f"{base_folder}/{s}px/{model_perf_file}", 'r') as f:
@@ -49,6 +51,7 @@ def get_data(base_folder, speeds, human_score_file="human_score.csv", model_perf
     y_values = []
     z_values = []
 
+    # Compute the average absolute difference for each point
     for meas_noise, process_noise in model_score:
         x_values.append(meas_noise)
         y_values.append(process_noise)
@@ -58,6 +61,8 @@ def get_data(base_folder, speeds, human_score_file="human_score.csv", model_perf
         #print(meas_noise, process_noise, val)
 
     return x_values, y_values, z_values
+
+# Plot lists of values as a colored 2d map
 
 
 def plot_flat(x_values, y_values, z_values, size_x, size_y, annot):
@@ -70,7 +75,7 @@ def plot_flat(x_values, y_values, z_values, size_x, size_y, annot):
     ax.set_title(
         f"Average absolute accuracy difference\nbetween a human subject and the model\nacross all speeds{annot}")
     fig.colorbar(im, shrink=0.5, aspect=5)
-    # plt.clim(0.05, 0.45)
+    # plt.clim(0.05, 0.45) # Limit color range
     ax.set_ylabel("Process noise")
     ax.set_xlabel("Measurement noise")
     plt.tight_layout()
